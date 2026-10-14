@@ -44,6 +44,8 @@ A data line that idles high shows its logic level on a meter, so a 5 V reading m
 
 Plug the cable into the AC's port and the C3. That's all. The AC powers the board through VBUS, and the C3's D−/D+ pins (GPIO18/19) carry the UART.
 
+On some units the port is keyed so that only MRCOOL's dongle fits, and a standard USB-A plug won't go in. [dongle-swap.md](dongle-swap.md) shows how to open it up, and how to fit the C3 inside the old dongle's case with a short USB-C to USB-A adapter.
+
 When a computer is attached at power-up, the firmware leaves the socket as a USB serial console. Anything else, the AC included, gets the UART. One socket means the board can't be powered from the computer and the AC at the same time.
 
 ## Option B: wired, with a level shifter

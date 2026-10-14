@@ -37,14 +37,16 @@ inline int percentFromFan(FanMode fan) {
   return pct < 20 ? 20 : pct;
 }
 
-// Modes that the HeaterCooler tile owns. Dry and fan-only belong to their
-// own services when those are enabled.
+// Modes in which the HeaterCooler tile shows as on. Dry counts as cooling:
+// the unit reports it in place of Cool, and the compressor still runs, so
+// the tile stays on (in Cool) alongside the Dry switch. Fan-only belongs to
+// its own service when that is enabled.
 inline bool isClimateMode(Mode m) {
   switch (m) {
     case MODE_AUTO:
     case MODE_COOL:
-    case MODE_HEAT: return true;
-    case MODE_DRY: return !ENABLE_DRY_SWITCH;
+    case MODE_HEAT:
+    case MODE_DRY: return true;
     case MODE_FAN_ONLY: return !ENABLE_FAN_ONLY_SERVICE;
     default: return false;
   }
@@ -234,12 +236,16 @@ struct FanOnlyService : Service::Fan, AcFollower {
 
 // --- simple switches -------------------------------------------------------
 
-// On = unit in `mode`. Off = power off, but only if it is still in `mode`.
+// On = unit in `mode`. Off = switch to `offMode`, but only if the unit is
+// still in `mode`. Dry uses Cool here, so turning Dry off keeps cooling
+// instead of shutting the unit down; the main tile turns it off.
 struct ModeSwitch : Service::Switch, AcFollower {
   SpanCharacteristic *on;
   Mode mode;
+  Mode offMode;
 
-  ModeSwitch(MideaLink &ac, Mode m, const char *name) : Service::Switch(), AcFollower(ac), mode(m) {
+  ModeSwitch(MideaLink &ac, Mode m, Mode off, const char *name)
+      : Service::Switch(), AcFollower(ac), mode(m), offMode(off) {
     new Characteristic::ConfiguredName(name);
     on = new Characteristic::On(false);
   }
@@ -248,7 +254,7 @@ struct ModeSwitch : Service::Switch, AcFollower {
     if (on->getNewVal())
       ac_.requestMode(mode);
     else if (ac_.state().mode == mode)
-      ac_.requestMode(MODE_OFF);
+      ac_.requestMode(offMode);
     return true;
   }
 

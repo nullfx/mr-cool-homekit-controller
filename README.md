@@ -14,7 +14,7 @@ The indoor unit's "USB" port is really a 9600-baud serial link that speaks the M
 | Oscillate | Louver swing (vertical by default) |
 | Current temperature, Heating/Cooling status | Indoor sensor; the status is inferred from room temp vs. set point |
 | **Fan Only** fan tile | Fan-only mode with its own speed control |
-| **Dry Mode** switch | Dehumidify mode |
+| **Dry Mode** switch | Dehumidify mode. The unit runs Dry in place of Cool, so the main tile stays on and shows Cool. Turning the switch off goes back to Cool. |
 | **Auto Fan** switch | Automatic fan speed |
 | **Eco**, **Turbo**, **Sleep** switches | Presets. The unit only allows Eco in Cool and Turbo in Heat/Cool; an impossible request flips back off. |
 | **Outdoor Temperature** sensor | Condenser's outdoor temperature reading |
@@ -31,6 +31,8 @@ Two ways to connect. Details and diagrams: **[docs/wiring.md](docs/wiring.md)**.
 | AC link | The board's own USB socket | GPIO16/17 through the shifter |
 | Build | `make flash` | `make flash CHIP=esp32` |
 | Catch | The AC's data lines reach the chip directly. **Measure them first:** they must be about 3.3 V, not 5 V. | Soldering |
+
+**Swapping the dongle step by step:** [docs/dongle-swap.md](docs/dongle-swap.md) is a photo guide to opening up the keyed socket and fitting a C3 inside the old dongle's case.
 
 Sources disagree on which data line is TX. The firmware tries both orientations and remembers the one that works, so you never have to swap wires.
 
@@ -139,7 +141,8 @@ The **BOOT** button doubles as HomeSpan's control button. Hold it about 3 second
 | Symptom | Fix |
 |---|---|
 | `Nothing received from the indoor unit on either line orientation` (web log) | Both RX/TX orientations were tried. On a C3, make sure it's a **data** cable, not charge-only. When wired, check that 5 V and GND reach the shifter's HV side and 3.3 V its LV side. Make sure the original dongle is unplugged. |
-| `rx` grows but there's never a status | When wired, usually a missing level shifter or one without HV pull-ups. Run `@v` to watch the frames. |
+| `rx` grows but there's never a status | When wired, usually a missing level shifter or one without HV pull-ups. Run `@v` to watch the frames. On a C3 with no console, the web log's `No status from the indoor unit` line shows the byte counts and the first bytes received. A real frame starts with `AA`. |
+| `HomeKit change ignored: no status from the indoor unit yet` (web log), or the AC beeps but the Home app never shows its state | The unit hears the board, but the board hears nothing back on D− (ESP RX). Changes are ignored until a status arrives, because without one the firmware doesn't know what mode to keep. Check the D− wire and measure its voltage (see [docs/wiring.md](docs/wiring.md)). |
 | C3 plugged into the AC still acts like a console | It saw USB traffic at boot. Power it from the AC port only, not a powered hub that also connects to a computer. |
 | Home app can't find the accessory | The phone and ESP32 must be on the same 2.4 GHz network and VLAN, with mDNS/Bonjour allowed. Check the console says `READY` or `NOT PAIRED`. |
 | Paired accessory shows "No Response" after re-flashing | Pairings survive flashing. If you ran `make erase` or `E`, remove the accessory from the Home app and pair again. |
@@ -162,6 +165,8 @@ lib/MideaUART/                   vendored Midea protocol library (MIT)
 tools/homekit_qr.py              QR payload / code for a setup code
 tools/vendor-mideauart.sh        refresh the vendored library
 docs/wiring.md                   hardware and installation
+docs/dongle-swap.md              photo guide: C3 in the old dongle's case
+docs/imgs/                       photos for the guides
 ```
 
 ## Credits

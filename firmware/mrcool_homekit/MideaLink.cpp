@@ -3,6 +3,7 @@
 #include <HomeSpan.h>  // homeSpan.addWebLog()
 #include <Helpers/Log.h>
 #include <Preferences.h>
+#include <driver/gpio.h>
 #include <utility>
 
 namespace mrcool {
@@ -18,6 +19,9 @@ static constexpr uint32_t kResyncMs = 1500;
 static constexpr uint32_t kPeriodicResyncMs = 60000;
 static constexpr uint32_t kLinkTimeoutMs = 30000;
 static constexpr uint32_t kNoRxWarningMs = 20000;
+// How often the web log repeats that HomeKit changes are being dropped,
+// so a user tapping around doesn't fill its 50 entries.
+static constexpr uint32_t kDroppedNoteMs = 60000;
 // With auto-swap on, try the other RX/TX orientation after this much silence.
 static constexpr uint32_t kSwapAfterMs = 8000;
 
@@ -30,6 +34,14 @@ static void note(const char *fmt, ...) {
   va_end(args);
   Serial.printf("[mrcool] %s\n", buf);
   homeSpan.addWebLog(false, "%s", buf);
+}
+
+void TapStream::firstRxHex(char *out, size_t len) const {
+  out[0] = '\0';
+  const uint32_t n = rxBytes_ < kFirstRxLen ? rxBytes_ : kFirstRxLen;
+  size_t pos = 0;
+  for (uint32_t i = 0; i < n && pos + 3 < len; i++)
+    pos += snprintf(out + pos, len - pos, i ? " %02X" : "%02X", firstRx_[i]);
 }
 
 // NVS key remembering that the configured pins work swapped.
@@ -54,7 +66,7 @@ void MideaLink::begin(HardwareSerial &port, int rxPin, int txPin, bool beeper, b
     prefs.end();
   }
 
-  port.begin(9600, SERIAL_8N1, rxPin_, txPin_);
+  beginUart();
   tap_ = new TapStream(port);
   orientSinceMs_ = millis();
 
@@ -72,6 +84,22 @@ void MideaLink::begin(HardwareSerial &port, int rxPin, int txPin, bool beeper, b
   ac_.setAutoconf(true);  // ask the unit for its capability report (see `@s`)
   ac_.addOnStateCallback([this]() { onAcStateChanged(); });
   ac_.setup();
+}
+
+void MideaLink::beginUart() {
+  port_->begin(9600, SERIAL_8N1, rxPin_, txPin_);
+  // Make RX a pure input. When the UART claims a USB pin, the core first
+  // runs the USB driver's deinit, which leaves both pins as open-drain
+  // outputs driven low (HWCDC::deinit). The UART re-routes TX but never
+  // turns RX's output off, so RX would hold the unit's TX line low and
+  // read a single 0x00. This keeps the UART's input routing; only the
+  // output side of the pad changes.
+  gpio_set_direction((gpio_num_t)rxPin_, GPIO_MODE_INPUT);
+  // Pull RX up so it idles high even if the unit's TX only pulls low. On a
+  // C3's USB socket AcPort has turned the USB pull resistors off, and
+  // nothing else holds the line. gpio_pullup_en() leaves the UART routing
+  // alone; pinMode() would not.
+  gpio_pullup_en((gpio_num_t)rxPin_);
 }
 
 void MideaLink::disable(const char *reason) {
@@ -100,7 +128,7 @@ void MideaLink::checkOrientation(uint32_t now) {
     return;
   std::swap(rxPin_, txPin_);
   port_->end();
-  port_->begin(9600, SERIAL_8N1, rxPin_, txPin_);
+  beginUart();
   orientSinceMs_ = now;
   rxAtOrient_ = tap_->rxBytes();
   swapAttempts_++;
@@ -131,16 +159,27 @@ void MideaLink::loop() {
     if (up)
       note("Indoor unit is answering on the UART");
     else
-      note("No data from the indoor unit for %lus", (unsigned long)(kLinkTimeoutMs / 1000));
+      note("No data from the indoor unit for %lus (rx %lu bytes, tx %lu bytes)",
+           (unsigned long)(kLinkTimeoutMs / 1000), (unsigned long)tap_->rxBytes(),
+           (unsigned long)tap_->txBytes());
   }
-  if (!warnedNoRx_ && tap_->rxBytes() == 0 && now > kNoRxWarningMs) {
-    warnedNoRx_ = true;
-    if (autoSwap_)
+  if (!warnedNoStatus_ && !hasStatus_ && now > kNoRxWarningMs) {
+    warnedNoStatus_ = true;
+    if (tap_->rxBytes() > 0) {
+      // Bytes arrived but never a valid frame: noise, a wrong logic level,
+      // or the unit's replies not reaching RX.
+      char hex[40];
+      tap_->firstRxHex(hex, sizeof(hex));
+      note("No status from the indoor unit: rx %lu bytes (first: %s), tx %lu bytes. "
+           "Check the line voltage and the D- wire.",
+           (unsigned long)tap_->rxBytes(), hex, (unsigned long)tap_->txBytes());
+    } else if (autoSwap_) {
       note("Nothing received from the indoor unit on either line orientation. "
            "Check the cable, 5V/GND and (if wired) the level shifter.");
-    else
+    } else {
       note("Nothing received from the indoor unit yet. Check 5V/GND, the level shifter, "
            "and try swapping the D+/D- wires.");
+    }
   }
 }
 
@@ -184,7 +223,22 @@ void MideaLink::requestPreset(Preset preset) {
 }
 
 void MideaLink::flushPending() {
-  if (!hasPending_ || ac_.controlInFlight() || millis() - lastRequestMs_ < kSettleMs)
+  if (!hasPending_)
+    return;
+  // MideaUART builds each control frame from the last status it read. With
+  // none, that is its defaults (mode OFF), so a set-point change alone
+  // would switch the unit off. Drop the request instead.
+  if (!hasStatus_) {
+    pending_ = Control{};
+    hasPending_ = false;
+    const uint32_t now = millis();
+    if (droppedNotedMs_ == 0 || now - droppedNotedMs_ >= kDroppedNoteMs) {
+      droppedNotedMs_ = now ? now : 1;
+      note("HomeKit change ignored: no status from the indoor unit yet");
+    }
+    return;
+  }
+  if (ac_.controlInFlight() || millis() - lastRequestMs_ < kSettleMs)
     return;
   if (debug_) {
     Serial.printf("[mrcool] control:%s%s%s%s%s\n",

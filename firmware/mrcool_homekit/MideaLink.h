@@ -23,6 +23,8 @@ class TapStream : public Stream {
   int read() override {
     int c = inner_.read();
     if (c >= 0) {
+      if (rxBytes_ < kFirstRxLen)
+        firstRx_[rxBytes_] = (uint8_t)c;
       rxBytes_++;
       lastRxMs_ = millis();
     }
@@ -41,12 +43,18 @@ class TapStream : public Stream {
   uint32_t rxBytes() const { return rxBytes_; }
   uint32_t txBytes() const { return txBytes_; }
   uint32_t lastRxMs() const { return lastRxMs_; }
+  // The first bytes ever received, as hex, for the web log. Noise and a
+  // real frame (which starts with 0xAA) look very different.
+  void firstRxHex(char *out, size_t len) const;
 
  private:
+  static constexpr uint32_t kFirstRxLen = 12;
+
   Stream &inner_;
   uint32_t rxBytes_ = 0;
   uint32_t txBytes_ = 0;
   uint32_t lastRxMs_ = 0;
+  uint8_t firstRx_[kFirstRxLen] = {};
 };
 
 // Exposes whether a control frame is still waiting for its answer.
@@ -77,7 +85,8 @@ class MideaLink {
   void loop();
 
   // Requests from HomeKit. They are merged and sent as one frame once
-  // the bus is free and writes have settled for a moment.
+  // the bus is free and writes have settled for a moment. Until the unit
+  // has sent its status they are dropped (see flushPending()).
   void requestMode(Mode mode);
   void requestTargetTemp(float celsius);
   void requestFan(FanMode fan);
@@ -104,6 +113,7 @@ class MideaLink {
   void flushPending();
   void onAcStateChanged();
   void checkOrientation(uint32_t now);
+  void beginUart();
 
   AirCon ac_;
   TapStream *tap_ = nullptr;
@@ -125,7 +135,8 @@ class MideaLink {
   uint32_t revision_ = 0;
   bool hasStatus_ = false;
   bool wasLinkUp_ = false;
-  bool warnedNoRx_ = false;
+  bool warnedNoStatus_ = false;
+  uint32_t droppedNotedMs_ = 0;
   bool debug_ = false;
 };
 

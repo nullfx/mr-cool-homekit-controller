@@ -82,7 +82,7 @@ static void buildAccessory() {
   new mrcool::FanOnlyService(ac, "Fan Only");
 #endif
 #if ENABLE_DRY_SWITCH
-  new mrcool::ModeSwitch(ac, mrcool::MODE_DRY, "Dry Mode");
+  new mrcool::ModeSwitch(ac, mrcool::MODE_DRY, mrcool::MODE_COOL, "Dry Mode");
 #endif
 #if ENABLE_AUTO_FAN_SWITCH
   new mrcool::AutoFanSwitch(ac, "Auto Fan");
