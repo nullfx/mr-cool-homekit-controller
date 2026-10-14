@@ -1,0 +1,5 @@
+build/
+.arduino/
+firmware/mrcool_homekit/secrets.h
+.DS_Store
+firmware/mrcool_homekit/build/
