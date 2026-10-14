@@ -1,3 +1,11 @@
+---
+name: Bug report
+about: Something doesn't work as described in the README
+title: ""
+labels: bug
+assignees: ""
+---
+
 <!--
 Thanks for reporting a bug. Fill in what applies and delete what doesn't.
 Never paste your Wi-Fi password, HomeKit setup code or OTA password here,

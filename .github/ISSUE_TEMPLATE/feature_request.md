@@ -1,3 +1,11 @@
+---
+name: Feature request
+about: Suggest a new Home app control, command or improvement
+title: ""
+labels: enhancement
+assignees: ""
+---
+
 <!--
 Thanks for the idea. Fill in what applies and delete what doesn't.
 Never paste your Wi-Fi password, HomeKit setup code or OTA password here,
