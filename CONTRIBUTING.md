@@ -7,12 +7,13 @@ By taking part you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
 ## Before you start
 
 - **Keep credentials out of everything you post.** Serial logs, the web log, screenshots and `secrets.h` can contain your Wi-Fi password, HomeKit setup code or OTA password. Remove them before you paste.
+- **Report security problems privately.** Don't open a public issue. See [SECURITY.md](SECURITY.md).
 - **Stay low-voltage.** This project only replaces the Wi-Fi dongle. Don't open the indoor unit's electronics or touch mains wiring for a contribution, and measure the data lines before you connect a board (see [docs/wiring.md](docs/wiring.md)).
-- **For anything bigger than a small fix, open an issue first** so we can agree on the approach before you spend time on it.
+- **For anything bigger than a small fix, open an issue first** so we can agree on the approach before you spend time on it. For a new feature, fill in the [feature request template](FEATURE_REQUEST_TEMPLATE.md).
 
 ## Reporting a bug
 
-Open an issue and include:
+Open an issue and fill in the [bug report template](BUG_REPORT_TEMPLATE.md). It asks for:
 
 - **Hardware:** board (e.g. ESP32-C3 SuperMini, NodeMCU-32S), how it's connected to the AC (C3 USB socket, or GPIO through a level shifter), and the indoor unit's model number.
 - **Firmware:** the `FW_VERSION` from `config.h` or the commit hash, and any changes you made to `config.h`.
